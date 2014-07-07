@@ -1,7 +1,7 @@
 /**
  * DocBuilder middleware module.
  *
- * @module middleware/jsdoc
+ * @module middleware/parsejsdoc
  *
  * @license
  * Copyright 2013 Cláudio Manuel Brás da Silva
@@ -18,36 +18,36 @@
  * Options specific to this middleware.
  * @constructor
  */
-function JsdocOptions ()
+function ParseJsdocOptions ()
 {}
 
-JsdocOptions.prototype = {
-  something: []
+ParseJsdocOptions.prototype = {
+  jsdoc: []
 };
 
 /**
  * @mixin
  */
-var JsdocOptionsMixin = {
+var ParseJsdocOptionsMixin = {
   /**
    * Options specific to the Main Module Synthetizer middleware.
-   * @type {JsdocOptions}
+   * @type {ParseJsdocOptions}
    */
-  jsdoc: new JsdocOptions ()
+  parseJsdoc: new ParseJsdocOptions ()
 };
 
-exports.options = JsdocOptionsMixin;
+exports.options = ParseJsdocOptionsMixin;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-exports.middleware = JsdocMiddleware;
+exports.middleware = ParseJsdocMiddleware;
 
 /**
  * @constructor
  * @implements {MiddlewareInterface}
  * @param {Context} context The execution context for the middleware stack.
  */
-function JsdocMiddleware (context)
+function ParseJsdocMiddleware (context)
 {
   /* jshint unused: vars */
 

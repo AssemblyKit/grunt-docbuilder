@@ -1,11 +1,11 @@
 /**
- * Angular Builder's data types.
+ * DocBuilder's data types.
  *
  * @module lib/types
  *
  * @license
  * Copyright 2013 Cláudio Manuel Brás da Silva
- * http://github.com/claudio-silva
+ * https://github.com/AssemblyKit/grunt-docbuilder
  * Licensed under the MIT license.
  */
 'use strict';
@@ -23,135 +23,71 @@ var util = require ('./gruntUtil')
  * Note: Middleware classes augment this class with their own options.
  *
  * @constructor
- * @mixes BuildAssetsOptionsMixin
- * @mixes MakeDebugBuildOptionsMixin
- * @mixes OverrideDependenciesOptionsMixin
- * @mixes MakeReleaseBuildOptionsMixin
- * @mixes ExportSourcePathsOptionsMixin
- * @mixes ExportRequiredStylesheetsOptionsMixin
- * @mixes ExportRequiredTemplatesOptionsMixin
+ * @mixes ParseDocsOptionsMixin
+ * @mixes ParseJsdocOptionsMixin
+ * @mixes RenderPagesOptionsMixin
  */
 function TaskOptions ()
 {}
 
 TaskOptions.prototype = {
   /**
-   * Main module name. Only this module and its dependencies will be exported.
-   * @type {string}
-   */
-  mainModule:         '',
-  /**
-   * A list of module names to ignore when building.
-   * This allows the source code to contain references to modules not present in the build (ex. 3rd party libraries that
-   * are loaded independently).
-   *
-   * If a module reference (for module access or for declaring a dependency) is found in the source code, which targets
-   * a module that is not declared anywhere in the build's source files, the build operation aborts when that module
-   * name is not present on this list.
-   * @type {string|string[]}
-   */
-  externalModules:    '',
-  /**
-   * A list of framework built-in modules (ex. 'ng') that will always be appended to the `externalModules` list when
-   * running tasks, so that references to them are ignored by the builder.
-   * This is reserved for internal use, but could be overridden if you wish to completely replace the built-in behavior.
-   * @type {string[]}
-   */
-  builtinModules:     ['ng'],
-  /**
-   * A list of modules to be excluded from the build.
-   *
-   * Unlike <code>externalModules</code>, which excludes each module and all of its dependencies, this option only
-   * excludes the specified module from the output, not its dependencies.
-   * One typical use for this is to exclude the main module from one or more build tasks.
-   * @type {string[]}
-   */
-  excludedModules:    [],
-  /**
-   * A list of file paths to prepend to the build output.
-   * This forces the inclusion of specific script files, independently of any source file scanning performed
-   * by Grunt.
-   * @type {string[]}
-   */
-  require:            [],
-  /**
    * Allows loading third-party middleware into the middleware stack.
    * This is a task-level option. Do not specify it at target-level.
    *
    * This option allows the definition of a list of external middleware modules to load and for each one, to specify
    * where to place it on the middleware stack.
-   * Each element in the list defines a module name (with the `load` property) and either the `before` or
-   * `after` property with the name of a target module on the middleware stack from where to insert the loaded one
-   * before or after it.
+   * Each element in the list defines a module name (with the `load` property) and one of the following properties:
+   * `before`, `after` or `over`. The property name selects the insertion position on the middleware stack for the
+   * loaded one.
    * Note: internal middlewares are loaded into the middleware stack before the external middlewares.
    * @type {Array.<{load: string, before: ?string, after: ?string}>|null}
    */
   externalMiddleware: null,
   /**
-   * Defines the list of middleware bundled with angular-builder.
+   * Defines the list of bundled middleware.
    * This is a task-level option. Do not specify it at target-level.
    *
    * This option sets a list of modules names to load and assemble into a middleware stack in the specified order.
    * This is reserved for internal use, but could be overridden if you wish to replace some or all of the
-   * built-in behavior.
+   * built-in behavior. Usually, though, you should use the `externalMiddleware` option.
    * WARNING: the order of middleware listed here is important! If you change it, the build process may fail!
    * @type {string[]}
    * @const
    */
   internalMiddleware: [
-    './middleware/jsdoc'
+    './middleware/parseDocs',
+    './middleware/parseJsdoc',
+    './middleware/renderPages'
   ]
 };
 
 //======================================================================================================================
 
 /**
- * A Grunt files array with extended options.
+ * A Grunt file references array.
  * @interface
  */
-function GruntFilesArrayExt ()
+function GruntFilesArray ()
 {}
 
-GruntFilesArrayExt.prototype = {
+GruntFilesArray.prototype = {
   /**
    * @type {string[]|null}
    */
-  src:          null,
+  src:  null,
   /**
    * @type {string|null}
    */
-  dest:         null,
-  /**
-   * A list of filenames or glob patterns that specify which javascript files should always be included in the build,
-   * even if they have no module declarations.
-   *
-   * <b>Warning:</b> the files must also be matched by <code>src</code> to be included.
-   *
-   * <b>Note:</b> patterns without slashes will match against the basename of the path even if it contains slashes,
-   * eg. pattern <code>*.js</code> will match filepath <code>path/to/file.js</code>.
-   *
-   * Usually, when a script file is found in the set of source files which doesn't contain a module declaration,
-   * that file is ignored.
-   * But, if the file name and path matches a file name or glob pattern specified here, it will still be included.
-   *
-   * Non-module files are output in the same order they were read, and <b>before</b> any module.
-   *
-   * <b>Tip:</b> You can append the current step's result script to another one that resulted from a previous build
-   * step.
-   * If you specify a target or file group exclusively for standalone script files and append the result to other built
-   * files, you will have more control on the order of the assembled files.
-   *
-   *  @type {string|string[]|null}
-   */
-  forceInclude: null
+  dest: null
 
 };
 
 //======================================================================================================================
 
 /**
- * API for an Angular Builder middleware plugin.
- * Defines handlers for the three stages of the build process: analyze --> trace --> build.
+ * API for a middleware plugin.
+ * Defines handlers for the main stages of the build process: analyze --> trace --> build.
  *
  * Note: implementing classes must have a compatible constructor.
  *
@@ -166,7 +102,7 @@ MiddlewareInterface.prototype = {
    * Load and analyze the specified source files.
    * Invoked once.
    *
-   * @param {GruntFilesArrayExt} filesArray The set of source code files to be processed.
+   * @param {GruntFilesArray} filesArray The set of source code files to be processed.
    */
   analyze: function (filesArray) {},
   /**
@@ -191,6 +127,32 @@ MiddlewareInterface.prototype = {
 //======================================================================================================================
 
 /**
+ * Reference types enum.
+ * @enum {string}
+ */
+var REFERENCE_TYPE = {
+  NONE: '',
+  SYMBOL: 'S',
+  TEXT: 'T'
+};
+
+function Reference ()
+{
+
+}
+
+Reference.prototype = {
+  name: '',
+  /**
+   * What kind of reference is it?
+   * @type {REFERENCE_TYPE}
+   */
+  type: ''
+};
+
+//======================================================================================================================
+
+/**
  * The execution context for the middleware stack.
  * Contains shared information available throughout the middleware stack.
  * @constructor
@@ -203,16 +165,7 @@ function Context (grunt, task, defaultOptions)
 {
   this.grunt = grunt;
   this.options = extend ({}, defaultOptions, task.options ());
-  if (task.flags.debug !== undefined) {
-    this.options.debugBuild.enabled = true;
-    this.options.releaseBuild.enabled = false;
-  }
-  // Clone the external modules and use it as a starting point.
-  this.modules = extend ({}, this._setupExternalModules ());
-  // Reset tracer.
-  this.loaded = {};
-  // Reset the scripts list to a clone of the `require` option or to an empty list.
-  this.standaloneScripts = (this.options.require || []).slice ();
+  this.references = {};
   this.shared = {};
 }
 
@@ -220,63 +173,21 @@ Context.prototype = {
   /**
    * The Grunt API.
    */
-  grunt:                 null,
+  grunt:      null,
   /**
    * Task-specific options set on the Gruntfile.
    * @type {TaskOptions}
    */
-  options:               null,
+  options:    null,
   /**
-   * A map of module names to module definition records.
-   * @type {Object.<string, ModuleDef>}
+   * A map of documentation references --> reference definitions.
+   * @type {Object.<string, Reference>}
    */
-  modules:               null,
-  /**
-   * A map of module names to boolean values that registers which modules were already
-   * emmited to/ referenced on the output.
-   * @type {Object.<string,boolean>}
-   */
-  loaded:                null,
-  /**
-   * A list of scripts that have no module definitions but still are forced to being included in the build.
-   * Each item contains the filename and the file content.
-   * @type {Array.<{path: string, content: string}>}
-   */
-  standaloneScripts:     null,
-  /**
-   * Source code to be prepended to the build output file.
-   * @type {string}
-   */
-  prependOutput:         '',
+  references: null,
   /**
    * Custom data shared between extensions.
    */
-  shared:                null,
-  /**
-   * Registers the configured external modules so that they can be ignored during the build output generation.
-   * @returns {Object.<string, ModuleDef>}
-   * @private
-   */
-  _setupExternalModules: function ()
-  {
-    /** @type {Object.<string, ModuleDef>} */
-    var modules = {};
-    ((typeof this.options.externalModules === 'string' ?
-      [this.options.externalModules] : this.options.externalModules
-      ) || []).
-      concat (this.options.builtinModules).
-      forEach (function (moduleName)
-    {
-      // Ignore redundant names.
-      if (!modules[moduleName]) {
-        /** @type {ModuleDef} */
-        var module = modules[moduleName] = new ModuleDef ();
-        module.name = moduleName;
-        module.external = true;
-      }
-    });
-    return modules;
-  }
+  shared:     null
 
 };
 
@@ -285,7 +196,6 @@ Context.prototype = {
 //======================================================================================================================
 
 module.exports = {
-  ModuleDef:          ModuleDef,
   ExtensionInterface: MiddlewareInterface,
   Context:            Context,
   TaskOptions:        TaskOptions
