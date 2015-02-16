@@ -1,7 +1,11 @@
 ## docbuilder
 > A documentation builder for javascript projects.
 
+## NOT READY FOR USE YET!
+
 ### What is DocBuilder?
+
+(to do: explain the concept)
 
 ## Getting Started
 
